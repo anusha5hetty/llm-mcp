@@ -1,7 +1,7 @@
+import json
 from typing import List, Dict, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from mcp import ClientSession
 from client import MCPClient
 from pydantic import BaseModel
 import uuid
@@ -11,7 +11,7 @@ app = FastAPI(title="MCP Client API")
 # Add CORS middleware to allow React frontend to call our API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your React app's domain
+    allow_origins=["*"],  # In production, replace with 4your React app's domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,14 +20,14 @@ app.add_middleware(
 class Message(BaseModel):
     message: str
 
-class ChatMessage:
-    def __init__(self, role: str, content: str):
-        self.role = role
-        self.content = content
+# class ChatMessage:
+#     def __init__(self, role: str, content: str):
+#         self.role = role
+#         self.content = content
 
 class ChatSession:
-    def __init__(self, messages: List[ChatMessage], client: MCPClient):
-        self.messages = messages
+    def __init__(self, messages: List[Dict[str, str]], client: MCPClient):
+        self.messages = messages # [{role: str, content: str}]
         self.client = client
 
 # Store active sessions
@@ -56,15 +56,33 @@ async def send_message(session_id: str, message: Message):
     chat_session = sessions[session_id]
     client = chat_session.client
     messages = chat_session.messages
-    messages.append(ChatMessage(role="user", content=message))
+    messages.append({"role": "user", "content": message})
     
     try:
-        response = await client.process_antropic_query(message)
-        assistant_message = ChatMessage(role="assistant", content=response)
+        response = await client.process_antropic_query(messages)
+        if isinstance(response, dict):
+            assistant_message = {"role": "assistant", "content": json.dumps(response)}
+        else:
+            assistant_message = {"role": "assistant", "content": response}
         messages.append(assistant_message)
         return {"response": response, "messages": messages}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/chat/message")
+async def send_message_without_session(message: Message):
+    """Send a message in an existing chat session"""
+    message = message.message
+    client = MCPClient()
+    await client.connect_to_mcp_server()
+        
+    try:
+        messages = [{"role": "user", "content": message}]
+        response = await client.process_antropic_query(messages)
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 
 @app.get("/chat/{session_id}/history")
 async def get_chat_history(session_id: str):

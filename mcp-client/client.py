@@ -1,7 +1,9 @@
 import sys
+import json
 import asyncio
+import copy
 import os
-from typing import Optional
+from typing import Optional, List, Dict
 from contextlib import AsyncExitStack
 
 from mcp import ClientSession, StdioServerParameters
@@ -57,11 +59,13 @@ class MCPClient:
         tools = response.tools
         print("\nConnected to server with tools:", [tool.name for tool in tools])
 
-    async def process_antropic_query(self, query: str) -> str:
+    async def process_antropic_query(self, messages_1) -> str:
         """Process a query using Claude and available tools"""
-        messages = [{"role": "user", "content": query}]
+        # messages = [{"role": "user", "content": query}]
+        messages_2 = copy.deepcopy(messages_1)
 
         response = await self.session.list_tools()
+        # resource = await self.session.read_resource("greeting://anusha")
         available_tools = [
             {
                 "name": tool.name,
@@ -70,13 +74,19 @@ class MCPClient:
             }
             for tool in response.tools
         ]
+        # available_resources = [{
+        #     "name": resource.name,
+        #     "description": resource.description,
+        #     "input_schema": resource.inputSchema,
+        # } for resource in response_resources.resources]
+        # available_tools.extend(available_resources)
 
         # Initial Claude API call
 
         response = self.anthropic.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=1000,
-            messages=messages,
+            messages=messages_2,
             tools=available_tools,
         )
 
@@ -94,35 +104,37 @@ class MCPClient:
 
                 # Execute tool call
                 result = await self.session.call_tool(tool_name, tool_args)
-                final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
+                json_result = json.loads(result.content[0].text)
+                if json_result.get("type") == "redirect":
+                    return json_result
+                else:
+                    final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
+                    assistant_message_content.append(content)
+                    messages_2.append(
+                        {"role": "assistant", "content": assistant_message_content}
+                    )
+                    messages_2.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": content.id,
+                                    "content": result.content,
+                                }
+                            ],
+                        }
+                    )
 
-                assistant_message_content.append(content)
-                messages.append(
-                    {"role": "assistant", "content": assistant_message_content}
-                )
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": content.id,
-                                "content": result.content,
-                            }
-                        ],
-                    }
-                )
+                    # Get next response from Claude
+                    response = self.anthropic.messages.create(
+                        model="claude-3-5-sonnet-20241022",
+                        max_tokens=1000,
+                        messages=messages_2,
+                        tools=available_tools,
+                    )
 
-                # Get next response from Claude
-                response = self.anthropic.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=1000,
-                    messages=messages,
-                    tools=available_tools,
-                )
-
-                final_text.append(response.content[0].text)
-
+                    final_text.append(response.content[0].text)
         return "\n".join(final_text)
     
     async def chat_loop(self):

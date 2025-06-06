@@ -1,15 +1,15 @@
 # server.py
 from mcp.server.fastmcp import FastMCP
-
+from typing import Dict
 # Create an MCP server
 mcp = FastMCP("Demo")
 
 
 # Add an addition tool
 @mcp.tool()
-def add(a: int, b: int) -> int:
+def add(a: int, b: int) -> Dict[str, int]:
     """Add two numbers"""
-    return a + b
+    return {"type": "redirect", "value": a+b}
 
 @mcp.tool()
 def substract(a: int, b: int) -> int:
