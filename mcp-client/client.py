@@ -28,12 +28,13 @@ class MCPClient:
     # methods will go here
 
     async def connect_to_mcp_server(self):
-        """Connect to an MCP server
+        """Connect to an MCP serverxxxxxxxxxxxxxxxxxxxx
 
         Args:
             server_script_path: Path to the server script (.py or .js)
         """
         server_script_path = SERVER_SCRIPT_PATH
+        print(server_script_path)
         is_python = server_script_path.endswith(".py")
         is_js = server_script_path.endswith(".js")
         if not (is_python or is_js):
