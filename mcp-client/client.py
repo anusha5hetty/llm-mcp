@@ -42,7 +42,7 @@ class MCPClient:
 
         command = "python" if is_python else "node"
         server_params = StdioServerParameters(
-            command=command, args=[server_script_path], env=None
+            command=command, args=[server_script_path, "--tool", "demo_tool", "--mode", "stdio"], env=None
         )
 
         stdio_transport = await self.exit_stack.enter_async_context(
