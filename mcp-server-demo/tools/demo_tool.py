@@ -1,9 +1,7 @@
 # server.py
 from mcp.server.fastmcp import FastMCP
 from typing import Dict
-# Create an MCP server
-mcp = FastMCP("Demo")
-
+from utils.shared_mcp import mcp
 
 # Add an addition tool
 @mcp.tool()

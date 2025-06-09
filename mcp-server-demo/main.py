@@ -1,9 +1,20 @@
 import os
 import argparse
 import importlib
+import pathlib
+import pkgutil
 import uvicorn
 import asyncio
 from utils.fastapi_factory import build_mcp_fastapi_app
+from utils.shared_mcp import mcp
+
+def discover_tool_modules() -> list[str]:
+    """Auto-discovers all mcp tools in tools/ folder."""
+    tools_dir = pathlib.Path(__file__).parent / "tools"
+    return [
+        name for _, name, _ in pkgutil.iter_modules([str(tools_dir)])
+        if not name.startswith("__")
+    ]
 
 def load_tool_module(module_name: str):
     """Dynamically import and return the tool module."""
@@ -16,19 +27,21 @@ async def print_registered_tools(mcp):
         print("-", t.name)
 
 def main():
-    parser = argparse.ArgumentParser(description="Run any MCP tool server")
-    parser.add_argument("--tool", required=True, help="Tool module name (without .py)")
+    parser = argparse.ArgumentParser(description="Run Portfolio MCP server")
+    parser.add_argument("--tools", nargs="+", help="Tool module names to load (default: all tools in /tools)")
     parser.add_argument("--mode", choices=["sse", "stdio"], default=os.getenv("MCP_MODE", "sse"))
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8080)
     args = parser.parse_args()
 
+    tool_modules = args.tools if args.tools else discover_tool_modules()
+
     # Step 1: Load the tool module
     try:
-        tool_module = load_tool_module(args.tool)
-        mcp = tool_module.mcp
+        for tool in tool_modules:
+            load_tool_module(tool)
     except Exception as e:
-        print(f"❌ Failed to load tool '{args.tool}': {e}")
+        print(f"❌ Failed to load tool(s)': {e}")
         return
 
     # Step 2: Run based on mode
@@ -43,7 +56,7 @@ def main():
         app = build_mcp_fastapi_app(mcp._mcp_server, debug=True)
         uvicorn.run(app, host=args.host, port=args.port)
     else:
-        print("[MCP] Running in stdio (CLI) mode...")
+        print("[Portfolio MCP] Running in stdio (CLI) mode...")
         mcp.run()
 
 if __name__ == "__main__":
