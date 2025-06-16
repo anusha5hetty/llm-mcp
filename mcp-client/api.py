@@ -51,7 +51,7 @@ async def send_message(session_id: str, message: Message):
     """Send a message in an existing chat session"""
     message = message.message
     if session_id not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+        return {"status": "Error: Session not found"}
     
     chat_session = sessions[session_id]
     client = chat_session.client
@@ -88,7 +88,7 @@ async def send_message_without_session(message: Message):
 async def get_chat_history(session_id: str):
     """Get the chat history for a session"""
     if session_id not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+        return {"status": "Error: Session not found"}
     
     chat_session = sessions[session_id]
     return {"messages": chat_session.messages}
@@ -97,7 +97,7 @@ async def get_chat_history(session_id: str):
 async def end_chat(session_id: str):
     """End a chat session and cleanup resources"""
     if session_id not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+        return {"status": "Error: Session not found"}
     
     chat_session = sessions[session_id]
     await chat_session.client.cleanup()
