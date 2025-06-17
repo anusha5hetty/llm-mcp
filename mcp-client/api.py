@@ -40,7 +40,7 @@ async def start_chat():
     client = MCPClient()
     
     try:
-        await client.connect_to_mcp_server()
+        await client.connect_to_mcp_server_stdio_transport()
         sessions[session_id] = ChatSession(messages=[], client=client)
         return {"session_id": session_id}
     except Exception as e:
@@ -74,7 +74,7 @@ async def send_message_without_session(message: Message):
     """Send a message in an existing chat session"""
     message = message.message
     client = MCPClient()
-    await client.connect_to_mcp_server()
+    await client.connect_to_mcp_server_stdio_transport()
         
     try:
         messages = [{"role": "user", "content": message}]

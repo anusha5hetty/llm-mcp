@@ -1,7 +1,8 @@
 import json
 import copy
 import os
-from typing import Optional
+import asyncio
+from typing import Optional, List, Dict
 from contextlib import AsyncExitStack
 
 from mcp.types import TextContent, ClientResult, CreateMessageResult
@@ -14,6 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # load environment variables from .env
 SERVER_SCRIPT_PATH = os.getenv("SERVER_SCRIPT_PATH")
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL")
 MODEL = os.getenv("MODEL")
 
 class MCPClient:
@@ -25,7 +27,7 @@ class MCPClient:
 
     # methods will go here
 
-    async def connect_to_mcp_server(self):
+    async def connect_to_mcp_server_stdio_transport(self):
         """Connect to an MCP serve
         Args:
             server_script_path: Path to the server script (.py or .js)
@@ -61,11 +63,47 @@ class MCPClient:
         tools = response.tools
         print("\nConnected to server with tools:", [tool.name for tool in tools])
 
-    async def process_antropic_query(self, messages, include_tools=True) -> str:
+    async def connect_to_mcp_server_streamable_http_transport(self):
+        """Connect to an MCP serve
+        Args:
+            server_script_path: Path to the server script (.py or .js)
+        """
+        steamable_http_transport = await self.exit_stack.enter_async_context(
+            streamablehttp_client(url=f"{MCP_SERVER_URL}/mcp", terminate_on_close=False)
+        )
+        receive_stream, send_stream, _ = steamable_http_transport
+        self.session = await self.exit_stack.enter_async_context(
+            ClientSession(receive_stream, send_stream, sampling_callback=self.sampling_callback)
+        )
+
+        # Client sends initialize request with protocol version and capabilities
+        # Server responds with its protocol version and capabilities
+        # Client sends initialized notification as acknowledgment
+        # Normal message exchange begins
+        await self.session.initialize()
+
+        # List available tools
+        response = await self.session.list_tools()
+        tools = response.tools
+        print("\nConnected to server with tools:", [tool.name for tool in tools])
+    
+    async def get_available_tools(self):
+        response = await self.session.list_tools()
+        tools = response.tools
+        return [
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.inputSchema,
+            }
+            for tool in tools
+        ]
+
+    async def process_antropic_query(self, messages) -> str:
         """Process a query using Claude and available tools"""
         messages_copy = copy.deepcopy(messages)
-
-        response, available_tools = await self.send_request_to_antropic(messages_copy, include_tools)
+        available_tools = await self.get_available_tools()
+        response = await self.send_request_to_antropic(messages_copy, available_tools)
 
         # Process response and handle tool calls
         final_text = []
@@ -83,10 +121,9 @@ class MCPClient:
                 
                 # Taking the first result content will only work if the tool returns a single result
                 first_result_content = result.content[0].text
-                is_json = first_result_content.startswith("{") and first_result_content.endswith("}") or first_result_content.startswith("[") and first_result_content.endswith("]")
-                json_result = is_json and json.loads(first_result_content)
-                if json_result:
-                    return json_result
+                is_json = self.is_string_json(first_result_content)
+                if is_json:
+                    return json.loads(first_result_content)
                 else:
                     final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
                     assistant_message_content.append(content)
@@ -107,46 +144,26 @@ class MCPClient:
                     )
 
                     # Get next response from Claude
-                    response = self.anthropic.messages.create(
-                        model="claude-3-5-sonnet-20241022",
-                        max_tokens=1000,
-                        messages=messages_copy,
-                        tools=available_tools,
-                    )
-
+                    response = await self.send_request_to_antropic(messages_copy, available_tools)
                     final_text.append(response.content[0].text)
         return "\n".join(final_text)
 
-    async def send_request_to_antropic(self, messages_2, include_tools):
-        available_tools = []
-        if include_tools:
-            response = await self.session.list_tools()
-            # self.session.list_resources()
-            # resource = await self.session.read_resource("greeting://anusha")
-            available_tools = [
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "input_schema": tool.inputSchema,
-                }
-                for tool in response.tools
-            ]
-            # available_resources = [{
-            #     "name": resource.name,
-            #     "description": resource.description,
-            #     "input_schema": resource.inputSchema,
-            # } for resource in response_resources.resources]
-            # available_tools.extend(available_resources)
-
+    async def send_request_to_antropic(self, messages, available_tools: List[Dict[str, str]]=None):
+        if available_tools:
             # Initial Claude API call
-
             response = self.anthropic.messages.create(
                 model=MODEL,
                 max_tokens=1000,
-                messages=messages_2,
+                messages=messages,
                 tools=available_tools,
-            )            
-        return response, available_tools
+            )
+        else:
+            response = self.anthropic.messages.create(
+                model=MODEL,
+                max_tokens=1000,
+                messages=messages,
+            )
+        return response
     
     async def sampling_callback(self, context, params):
         print(context)
@@ -190,6 +207,10 @@ class MCPClient:
         """Clean up resources"""
         await self.exit_stack.aclose()
 
+    @staticmethod
+    def is_string_json(json_str: str) -> bool:
+        return (json_str.startswith("{") and json_str.endswith("}")) or (json_str.startswith("[") and json_str.endswith("]"))
+
     
 
 async def main():
@@ -199,11 +220,11 @@ async def main():
 
     client = MCPClient()
     try:
-        await client.connect_to_mcp_server()
+        await client.connect_to_mcp_server_streamable_http_transport()
         await client.chat_loop()
     finally:
         await client.cleanup()
 
 
-# if __name__ == "__main__":
-#     asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
