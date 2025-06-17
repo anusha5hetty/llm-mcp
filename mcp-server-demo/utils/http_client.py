@@ -1,9 +1,19 @@
 from enum import Enum
 from typing import Any, Optional
 import httpx
-from mcp.server.fastmcp import FastMCP
+from pathlib import Path
+import sys
+import os
+from dotenv import load_dotenv
 
-mcp = FastMCP("Strategy")
+PATH = Path(__file__).resolve().parents[1]
+sys.path.append(str(PATH))
+
+from utils.shared_mcp import Session
+
+load_dotenv() 
+LOGIN_CERT = os.getenv("LOGIN_CERT")
+BASE_API_URL = os.getenv("BASE_API_URL")
 
 class HTTPMethod(str, Enum):
     GET = "GET"
@@ -12,8 +22,7 @@ class HTTPMethod(str, Enum):
     PATCH = "PATCH"
     DELETE = "DELETE"
     
-BASE_API_URL = "http://localhost/planview"
-LOGIN_CERT = "Sr-cS8gm8SYC2mBZTyekhD9-r2pNNwzHjJe_V-Xpa"
+
 
 DEFAULT_HEADERS ={
     "User-Agent": "MyLocalClient/1.0",
@@ -22,7 +31,6 @@ DEFAULT_HEADERS ={
 }
 
 Default_Cookies = {
-    "LoginCert": "Sr-cS8gm8SYC2mBZTyekhD9-r2pNNwzHjJe_V-Xpa"
 }
 
 async def make_api_request(
@@ -32,11 +40,13 @@ async def make_api_request(
     body: Optional[dict[str, Any]] = None,
     headers: Optional[dict[str, str]] = None,
     cookies: Optional[dict[str, str]] = None,
-    timeout: float = 40.0
+    timeout: float = 40.0,
 ) -> Optional[dict[str, Any]]:
     """Make an HTTP request to the configured API endpoint."""
     merged_headers = {**DEFAULT_HEADERS, **(headers or {})}
     merged_cookies = {**Default_Cookies, **(cookies or {})}
+    merged_cookies["LoginCert"] = Session.login_cert or LOGIN_CERT
+    
     url = f"{BASE_API_URL.rstrip('/')}/{endpoint.lstrip('/')}"
     
     async with httpx.AsyncClient() as client:
@@ -52,7 +62,8 @@ async def make_api_request(
                 timeout=timeout
             )
             response.raise_for_status()
-            return response.json()
+            if response.text:
+                return response.json()
         except httpx.HTTPStatusError as e:
             print(f"API error {e.response.status_code}: {e.response.text}")
         except Exception as e:

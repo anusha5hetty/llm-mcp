@@ -1,21 +1,20 @@
-import sys
 import json
-import asyncio
 import copy
 import os
-from typing import Optional, List, Dict
+from typing import Optional
 from contextlib import AsyncExitStack
 
-from mcp import ClientSession, StdioServerParameters
+from mcp.types import TextContent, ClientResult, CreateMessageResult
+from mcp import ClientSession, StdioServerParameters, CreateMessageResult
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamablehttp_client
 
 from anthropic import Anthropic
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()  # load environment variables from .env
-openai_api_key = os.getenv("OPENAI_API_KEY")
 SERVER_SCRIPT_PATH = os.getenv("SERVER_SCRIPT_PATH")
+MODEL = os.getenv("MODEL")
 
 class MCPClient:
     def __init__(self):
@@ -23,13 +22,11 @@ class MCPClient:
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.anthropic = Anthropic()
-        self.openai = OpenAI(api_key=openai_api_key)
 
     # methods will go here
 
     async def connect_to_mcp_server(self):
-        """Connect to an MCP serverxxxxxxxxxxxxxxxxxxxx
-
+        """Connect to an MCP serve
         Args:
             server_script_path: Path to the server script (.py or .js)
         """
@@ -39,7 +36,7 @@ class MCPClient:
         is_js = server_script_path.endswith(".js")
         if not (is_python or is_js):
             raise ValueError("Server script must be a .py or .js file")
-
+        # python <path to server script - main.py>
         command = "python" if is_python else "node"
         server_params = StdioServerParameters(
             command=command, args=[server_script_path, "--mode", "stdio"], env=None
@@ -50,9 +47,13 @@ class MCPClient:
         )
         self.stdio, self.write = stdio_transport
         self.session = await self.exit_stack.enter_async_context(
-            ClientSession(self.stdio, self.write)
+            ClientSession(self.stdio, self.write, sampling_callback=self.sampling_callback)
         )
 
+        # Client sends initialize request with protocol version and capabilities
+        # Server responds with its protocol version and capabilities
+        # Client sends initialized notification as acknowledgment
+        # Normal message exchange begins
         await self.session.initialize()
 
         # List available tools
@@ -60,40 +61,14 @@ class MCPClient:
         tools = response.tools
         print("\nConnected to server with tools:", [tool.name for tool in tools])
 
-    async def process_antropic_query(self, messages_1) -> str:
+    async def process_antropic_query(self, messages, include_tools=True) -> str:
         """Process a query using Claude and available tools"""
-        # messages = [{"role": "user", "content": query}]
-        messages_2 = copy.deepcopy(messages_1)
+        messages_copy = copy.deepcopy(messages)
 
-        response = await self.session.list_tools()
-        # resource = await self.session.read_resource("greeting://anusha")
-        available_tools = [
-            {
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": tool.inputSchema,
-            }
-            for tool in response.tools
-        ]
-        # available_resources = [{
-        #     "name": resource.name,
-        #     "description": resource.description,
-        #     "input_schema": resource.inputSchema,
-        # } for resource in response_resources.resources]
-        # available_tools.extend(available_resources)
-
-        # Initial Claude API call
-
-        response = self.anthropic.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1000,
-            messages=messages_2,
-            tools=available_tools,
-        )
+        response, available_tools = await self.send_request_to_antropic(messages_copy, include_tools)
 
         # Process response and handle tool calls
         final_text = []
-
         assistant_message_content = []
         for content in response.content:
             if content.type == "text":
@@ -105,16 +80,20 @@ class MCPClient:
 
                 # Execute tool call
                 result = await self.session.call_tool(tool_name, tool_args)
-                json_result = json.loads(result.content[0].text)
-                if json_result.get("type") == "redirect":
+                
+                # Taking the first result content will only work if the tool returns a single result
+                first_result_content = result.content[0].text
+                is_json = first_result_content.startswith("{") and first_result_content.endswith("}") or first_result_content.startswith("[") and first_result_content.endswith("]")
+                json_result = is_json and json.loads(first_result_content)
+                if json_result:
                     return json_result
                 else:
                     final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
                     assistant_message_content.append(content)
-                    messages_2.append(
+                    messages_copy.append(
                         {"role": "assistant", "content": assistant_message_content}
                     )
-                    messages_2.append(
+                    messages_copy.append(
                         {
                             "role": "user",
                             "content": [
@@ -131,13 +110,64 @@ class MCPClient:
                     response = self.anthropic.messages.create(
                         model="claude-3-5-sonnet-20241022",
                         max_tokens=1000,
-                        messages=messages_2,
+                        messages=messages_copy,
                         tools=available_tools,
                     )
 
                     final_text.append(response.content[0].text)
         return "\n".join(final_text)
+
+    async def send_request_to_antropic(self, messages_2, include_tools):
+        available_tools = []
+        if include_tools:
+            response = await self.session.list_tools()
+            # self.session.list_resources()
+            # resource = await self.session.read_resource("greeting://anusha")
+            available_tools = [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.inputSchema,
+                }
+                for tool in response.tools
+            ]
+            # available_resources = [{
+            #     "name": resource.name,
+            #     "description": resource.description,
+            #     "input_schema": resource.inputSchema,
+            # } for resource in response_resources.resources]
+            # available_tools.extend(available_resources)
+
+            # Initial Claude API call
+
+            response = self.anthropic.messages.create(
+                model=MODEL,
+                max_tokens=1000,
+                messages=messages_2,
+                tools=available_tools,
+            )            
+        return response, available_tools
     
+    async def sampling_callback(self, context, params):
+        print(context)
+        print(params)
+        
+        lst_messages = []
+        for message in params.messages:
+            lst_messages.append({"role": message.role, "content": message.content.text})
+        if lst_messages:
+            model_response = self.anthropic.messages.create(
+                    model=MODEL,
+                    max_tokens=4000,
+                    messages=lst_messages,
+                )
+            lst_cumulative_response = [content.text for content in model_response.content]
+            str_final_response = "\n".join(lst_cumulative_response)
+            response = ClientResult(CreateMessageResult(content=TextContent(text=str_final_response, type="text"), model=MODEL, role="assistant"))
+        else:
+            response = ClientResult(CreateMessageResult(content=TextContent(text="Something went wrong while processing the request", type="text"), model=MODEL, role="assistant"))
+        return response
+        
     async def chat_loop(self):
         """Run an interactive chat loop"""
         print("\nMCP Client Started!")
@@ -160,6 +190,8 @@ class MCPClient:
         """Clean up resources"""
         await self.exit_stack.aclose()
 
+    
+
 async def main():
     # if len(sys.argv) < 2:
     #     print("Usage: python client.py <path_to_server_script>")
@@ -171,7 +203,6 @@ async def main():
         await client.chat_loop()
     finally:
         await client.cleanup()
-
 
 
 # if __name__ == "__main__":

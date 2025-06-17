@@ -1,0 +1,5 @@
+PLAN_PAGE_URL = "{BASE_API_URL}/PRM/ProjectResourceMgmt.aspx?pt=PROJECT&st=$Plan&ptab=PRJ_MAIN&sc={project_id}&scode={project_id}"
+GET_STRUCTURE_PARTIAL_URL = "/internal-api/projects/new"
+CREATE_PARTIAL_URL = "/internal-api/projects"
+GET_STRUCTURE_URL = "/internal-api/works/new?fatherCode={father_code}"
+CREATE_URL = "/internal-api/works"
