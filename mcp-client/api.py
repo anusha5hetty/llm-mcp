@@ -1,6 +1,6 @@
 import json
 from typing import List, Dict, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from client import MCPClient
 from pydantic import BaseModel
@@ -32,6 +32,21 @@ class ChatSession:
 
 # Store active sessions
 sessions: Dict[str, ChatSession] = {}
+
+@app.get("/chat/start")
+async def start_chat(loginCert: Optional[str] = Query(..., description="PV LoginCert")):
+    """Start a new chat session. Initializes a new session with a new MCPClient"""
+    session_id = str(uuid.uuid4())
+    client = MCPClient(PF_loginCert=loginCert)
+    
+    try:
+        await client.connect_to_mcp_server_stdio_transport()
+        sessions[session_id] = ChatSession(messages=[{"role":"assistant", "content":"you are like a global search with enhanced context. The enhanced context is provided to you via the mcp tools registered"}], client=client)
+        print(f"[Chat] Session started for loginCert={client.PF_loginCert}, session_id={session_id}")
+        return {"session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/chat/start")
 async def start_chat():

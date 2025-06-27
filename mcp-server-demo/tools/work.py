@@ -1,6 +1,6 @@
 import sys
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pathlib import Path
 from fastmcp.server.context import Context
 import asyncio
@@ -8,7 +8,7 @@ import asyncio
 PATH = Path(__file__).resolve().parents[1]
 sys.path.append(str(PATH))
 
-from utils.shared_mcp import mcp
+from utils.shared_mcp import mcp, Session
 from features.project import Project
 from dotenv import load_dotenv
 from utils.helpers import is_string_json
@@ -17,8 +17,11 @@ load_dotenv()  # load environment variables from .env
 
 
 @mcp.tool()
-async def create_work(work_type: str, work_name: str, ctx: Context)-> Dict[str, Any]:
-    """Create a work from a project structure. This needs to be triggered if there is a work structure in the request"""
+async def create_work(work_type: str, work_name: str, ctx: Context, PF_loginCert: Optional[str] = None)-> Dict[str, Any]:
+    """Create a work from a project structure. This needs to be triggered if there is a work structure in the request
+      Note:
+        The parameter 'PF_loginCert' is not required from the user. It will be fetched internally by the system.
+    """
     format_work = {
       "items": [
         {
@@ -44,6 +47,7 @@ async def create_work(work_type: str, work_name: str, ctx: Context)-> Dict[str, 
         }
       ]
     }
+    Session.login_cert = PF_loginCert
     str_format_work = json.dumps(format_work)
     messages = [{"role": "user", "content": f"Create a project structure for the following work type: {work_type} and work name: {work_name}. If the name is not provided, use the work type as the name. Please return the project structure in json, in the following format \
             : {str_format_work}. I want the result to not be in nested json. I want to know the immediate parent of an item. Don't response with anything else. Only send the json response"}]

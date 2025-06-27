@@ -19,7 +19,8 @@ MCP_SERVER_URL = os.getenv("MCP_SERVER_URL")
 MODEL = os.getenv("MODEL")
 
 class MCPClient:
-    def __init__(self):
+    def __init__(self, PF_loginCert = None):
+        self.PF_loginCert = PF_loginCert
         # Initialize session and client objects
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
@@ -115,6 +116,8 @@ class MCPClient:
             elif content.type == "tool_use":
                 tool_name = content.name
                 tool_args = content.input
+                tool_args["PF_loginCert"] = self.PF_loginCert
+
 
                 # Execute tool call
                 result = await self.session.call_tool(tool_name, tool_args)
