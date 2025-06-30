@@ -1,5 +1,5 @@
 import sys
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from mcp.server.fastmcp import FastMCP
 from starlette.responses import Response
 # from starlette.routing import Mount
@@ -8,10 +8,10 @@ PATH = Path(__file__).resolve().parents[1]
 sys.path.append(str(PATH))
 from utils.http_client import format_strategy_summary, make_api_request, BASE_API_URL, HTTPMethod
 from utils.shared_mcp import mcp
-
+from datetime import datetime
 
 @mcp.tool()
-async def smart_timeentry(id: str, PF_loginCert: Optional[str] = None) -> str:
+async def smart_timeentry(date: str, PF_loginCert: Optional[str] = None) -> Dict[str, str]:
     """Do auto/smart timeentry for the user's Timesheet
 
     Args: 
