@@ -48,18 +48,18 @@ async def start_chat(loginCert: Optional[str] = Query(..., description="PV Login
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/chat/start")
-async def start_chat():
-    """Start a new chat session. Initializes a new session with a new MCPClient"""
-    session_id = str(uuid.uuid4())
-    client = MCPClient()
+# @app.get("/chat/start")
+# async def start_chat():
+#     """Start a new chat session. Initializes a new session with a new MCPClient"""
+#     session_id = str(uuid.uuid4())
+#     client = MCPClient()
     
-    try:
-        await client.connect_to_mcp_server_stdio_transport()
-        sessions[session_id] = ChatSession(messages=[], client=client)
-        return {"session_id": session_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+#     try:
+#         await client.connect_to_mcp_server_stdio_transport()
+#         sessions[session_id] = ChatSession(messages=[], client=client)
+#         return {"session_id": session_id}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat/{session_id}/message")
 async def send_message(session_id: str, message: Message):
@@ -85,10 +85,10 @@ async def send_message(session_id: str, message: Message):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/chat/message")
-async def send_message_without_session(message: Message):
+async def send_message_without_session(message: Message, loginCert: Optional[str] = Query(..., description="PV LoginCert")):
     """Send a message in an existing chat session"""
     message = message.message
-    client = MCPClient()
+    client = MCPClient(PF_loginCert=loginCert)
     await client.connect_to_mcp_server_stdio_transport()
         
     try:

@@ -56,7 +56,7 @@ class Project:
                 structure_code = await self.create(name, description)
                 project_id = structure_code
                 processed_work[work_id] = (structure_code, name)
-                Session.work_cache[work_name]["self"] = structure_code            
+                Session.work_cache[work_name]["self"] = structure_code
 
         plan_page_url = PLAN_PAGE_URL.format(BASE_API_URL=BASE_API_URL, project_id=project_id)
         return {"type": "redirect", "data": plan_page_url}
