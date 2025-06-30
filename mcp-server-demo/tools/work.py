@@ -3,14 +3,14 @@ import json
 from typing import Dict, Any, Optional
 from pathlib import Path
 from fastmcp.server.context import Context
-import asyncio
+from dotenv import load_dotenv
+
 
 PATH = Path(__file__).resolve().parents[1]
 sys.path.append(str(PATH))
 
 from utils.shared_mcp import mcp, Session
 from features.project import Project
-from dotenv import load_dotenv
 from utils.helpers import is_string_json
 
 load_dotenv()  # load environment variables from .env
@@ -62,7 +62,7 @@ async def create_work(work_type: str, work_name: str, ctx: Context, PF_loginCert
       
       if json_response:
         json_result = json.loads(first_result_content)
-        return await project.create_work_and_wbs_in_pf(json_result)
+        return await project.create_work_and_wbs_in_pf(json_result, work_name)
     except Exception as e:
       return {"type": "text", "data": f"Something Went Wrong when creating the work: {e}"}
 

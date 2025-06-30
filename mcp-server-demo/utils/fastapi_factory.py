@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from starlette.responses import Response
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http import StreamableHTTPServerTransport
 
 def build_mcp_fastapi_app(mcp_server: Server, *, debug: bool = False) -> FastAPI:
     """Reusable FastAPI app builder for any MCP server."""
