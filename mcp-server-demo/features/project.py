@@ -59,7 +59,7 @@ class Project:
                 Session.work_cache[work_name]["self"] = structure_code            
 
         plan_page_url = PLAN_PAGE_URL.format(BASE_API_URL=BASE_API_URL, project_id=project_id)
-        return {"type": "text", "data": f"Work created: {plan_page_url}"}
+        return {"type": "redirect", "data": plan_page_url}
 
     @staticmethod
     async def get_pf_parent_details(work_structure, processed_work, parent_id):
