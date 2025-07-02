@@ -62,8 +62,8 @@ def make_allocation_paylod(project_code, task_code, resource_code):
                         "LinkPath": ""
                     }, {
                         "ColumnId": "ALLO_RESOURCE_DESCRIPTION",
-                        "CurrentValue": "389|M Davis",
-                        "OriginalValue": "389|M Davis",
+                        "CurrentValue": f"{resource_code}|Demo Ai",
+                        "OriginalValue": f"{resource_code}|Demo Ai",
                         "Type": 7,
                         "DisplayText": None,
                         "IsReadOnly": False,

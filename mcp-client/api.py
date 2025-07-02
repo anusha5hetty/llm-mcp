@@ -40,7 +40,7 @@ async def start_chat(loginCert: Optional[str] = Query(..., description="PV Login
     client = MCPClient(PF_loginCert=loginCert)
     
     try:
-        await client.connect_to_mcp_server_stdio_transport()
+        await client.connect_to_mcp_server_streamable_http_transport()
         sessions[session_id] = ChatSession(messages=[{"role":"assistant", "content":"you are like a global search with enhanced context. The enhanced context is provided to you via the mcp tools registered"}], client=client)
         print(f"[Chat] Session started for loginCert={client.PF_loginCert}, session_id={session_id}")
         return {"session_id": session_id}
@@ -89,7 +89,7 @@ async def send_message_without_session(message: Message, loginCert: Optional[str
     """Send a message in an existing chat session"""
     message = message.message
     client = MCPClient(PF_loginCert=loginCert)
-    await client.connect_to_mcp_server_stdio_transport()
+    await client.connect_to_mcp_server_streamable_http_transport()
         
     try:
         messages = [{"role": "user", "content": message}]

@@ -3,7 +3,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 from features.task import Task
-from utils.shared_mcp import Session
+from utils.shared_mcp import work_cache
 from utils.http_client import make_api_request, HTTPMethod
 from utils.helpers import find_details_in_dct
 from utils.constants import PLAN_PAGE_URL, GET_STRUCTURE_PARTIAL_URL, CREATE_PARTIAL_URL
@@ -39,7 +39,7 @@ class Project:
         """Create a work from a project structure. This needs to be triggered if there is a work structure in the request"""
         processed_work = {}
         work_structure = dct_work_structure.get("items")
-        Session.work_cache[work_name] = {}
+        work_cache[work_name] = {}
         
         project_id = None
         for item in work_structure:
@@ -51,12 +51,12 @@ class Project:
                 parent_structure_code = await self.get_pf_parent_details(work_structure, processed_work, parent_id)
                 structure_code = await self.task.create(name, description, parent_structure_code)
                 processed_work[work_id] = (structure_code, name)
-                Session.work_cache[work_name][name] = structure_code
+                work_cache[work_name][name] = structure_code
             else:
                 structure_code = await self.create(name, description)
                 project_id = structure_code
                 processed_work[work_id] = (structure_code, name)
-                Session.work_cache[work_name]["self"] = structure_code
+                work_cache[work_name]["self"] = structure_code
 
         plan_page_url = PLAN_PAGE_URL.format(BASE_API_URL=BASE_API_URL, project_id=project_id)
         return {"type": "redirect", "data": plan_page_url}

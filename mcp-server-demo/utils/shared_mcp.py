@@ -17,4 +17,5 @@ def set_mcp(mcp_instance: FastMCP):
 
 class Session:
     login_cert = None
-    work_cache = {}
+
+work_cache = {}
